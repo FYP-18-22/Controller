@@ -33,7 +33,7 @@ float thermocoupleTemp = 0.0;
 float DS18B20Temp0 = 0.0;
 float DS18B20Temp1 = 0.0;
 short int triac_delay = 0;
-triac_delay = constrain(triac_delay, 0, 8);
+short int constrained_triac_delay = constrain(triac_delay, 0, 6);
 void setup(void)
 {
 
@@ -62,6 +62,8 @@ void loop(void)
   Serial.println(DS18B20Temp0);
   Serial.print("Temp 2 is: ");
   Serial.println(DS18B20Temp1);
+  Serial.print("Triac delay is: ");
+  Serial.println(triac_delay);
   runPump();
   checkTemperatureDifference(DS18B20Temp0,DS18B20Temp1);
   if(millis()-lastRead >= 1000)
@@ -177,7 +179,7 @@ void logData()
 void increaseFlowrate()
 {
   //implement increased flowrate
-  triac_delay += 1;
+  constrained_triac_delay += 1;
 
 }
 
@@ -186,7 +188,7 @@ void increaseFlowrate()
 */
 void decreaseFlowrate()
 {
-  triac_delay -= 1;
+  constrained_triac_delay -= 1;
 }
 
 /**
@@ -195,7 +197,7 @@ void decreaseFlowrate()
 void runPump()
 {
   // TO IMPLEMENT RUN PUMP
-  delay(triac_delay);
+  delay(constrained_triac_delay);
   digitalWrite(PUMP_PIN, HIGH);
   delayMicroseconds(10);
   digitalWrite(PUMP_PIN, LOW);
