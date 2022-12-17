@@ -32,8 +32,8 @@ unsigned long lastRead = 0;
 float thermocoupleTemp = 0.0;
 float DS18B20Temp0 = 0.0;
 float DS18B20Temp1 = 0.0;
-int pumpSpeed = 0;
-
+short int triac_delay = 0;
+triac_delay = constrain(triac_delay, 0, 8);
 void setup(void)
 {
 
@@ -43,6 +43,7 @@ void setup(void)
   tests();
   pinMode(PUMP_PIN,OUTPUT);
   pinMode(HEATER_PIN,OUTPUT);
+  attachInterrupt(ZERO_CROSS_PIN, runPump, CHANGE);
 }
 void loop(void)
 {
@@ -63,7 +64,8 @@ void loop(void)
   Serial.println(DS18B20Temp1);
   runPump();
   checkTemperatureDifference(DS18B20Temp0,DS18B20Temp1);
-  if(millis()-lastRead >= 1000){
+  if(millis()-lastRead >= 1000)
+  {
     print_lcd(thermocoupleTemp,DS18B20Temp0,DS18B20Temp1);
     lastRead=millis();
   }
@@ -146,7 +148,8 @@ bool DS18B20Test()
   return true;
 }
 
-void print_lcd(float temp1, float temp2, float temp3){
+void print_lcd(float temp1, float temp2, float temp3)
+{
   lcd.clear();
   lcd.setCursor(0,0);
   lcd.print("Thermocouple: ");
@@ -163,68 +166,79 @@ void print_lcd(float temp1, float temp2, float temp3){
 /**
  * @brief function to log data
 */
-void logData(){
+void logData()
+{
 
 }
 
 /**
  * @brief function to increase flowrate according to temperature
 */
-void increaseFlowrate(){
+void increaseFlowrate()
+{
   //implement increased flowrate
+  triac_delay += 1;
 
 }
 
 /**
  * @brief function to decrease flowrate.
 */
-void decreaseFlowrate(){
-
+void decreaseFlowrate()
+{
+  triac_delay -= 1;
 }
 
 /**
  * @brief function to run the pump.
 */
-void runPump(){
+void runPump()
+{
   // TO IMPLEMENT RUN PUMP
+  delay(triac_delay);
+  digitalWrite(PUMP_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(PUMP_PIN, LOW);
   
 }
 
-void checkTemperatureDifference(float a, float b){
+void checkTemperatureDifference(float a, float b)
+{
   if(a-b>10){
     increaseFlowrate();
   }
   else if (a-b<0){
     decreaseFlowrate();
   }
-
 }
 /**
  * @brief function to turn on the heater
 */
-void turnOnHeater(){
+void turnOnHeater()
+{
   digitalWrite(HEATER_PIN,HIGH);
-
 }
 
 /**
  * @brief function to turn off the heater
 */
-void turnOffHeater(){
+void turnOffHeater()
+{
   digitalWrite(HEATER_PIN,LOW);
-
 }
 
 /**
  * @brief Function to turn on the fan
 */
-void turnOnFan(){
+void turnOnFan()
+{
   digitalWrite(FAN_PIN,HIGH);
 }
 
 /**
  * @brief Function to turn the fan off
  * */
-void turnOffFan(){
+void turnOffFan()
+{
   digitalWrite(FAN_PIN,LOW);
 }

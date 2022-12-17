@@ -13,10 +13,10 @@
 #define CONTROL_TEMP_VALUE 200.0
 
 
-#define PUMP_PIN PB14
+#define PUMP_PIN PB4
+#define ZERO_CROSS_PIN PA0
 #define HEATER_PIN PB10
 #define FAN_PIN PB10
-
 
 
 #endif
