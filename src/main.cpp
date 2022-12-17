@@ -23,6 +23,8 @@ bool thermocoupleTest();
 bool DS18B20Test();
 void print_lcd(float temp1, float temp2, float temp3);
 void controlFlowrate(float tempDifference, float wallTemperature);
+void runPump();
+void checkTemperatureDifference(float a, float b);
 
 
 //Global variables
