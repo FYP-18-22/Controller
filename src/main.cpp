@@ -7,7 +7,6 @@
 #include "LiquidCrystal_I2C.h"
 #include "defs.h"
 
-
 // Objects
 MAX6675 thermocouple(sckPin, csPin, soPin); // create instance object of MAX6675
 OneWire oneWire(ONE_WIRE_0);
@@ -24,16 +23,19 @@ bool DS18B20Test();
 void print_lcd(float temp1, float temp2, float temp3);
 void controlFlowrate(float tempDifference, float wallTemperature);
 void runPump();
-void checkTemperatureDifference(float a, float b);
+void checkTemperatureDifference(float a, float b, float c, float d);
+void turnOnHeater();
+void turnOffHeater();
 
-
-//Global variables
+// Global variables
 unsigned long lastRead = 0;
 float thermocoupleTemp = 0.0;
 float DS18B20Temp0 = 0.0;
 float DS18B20Temp1 = 0.0;
+float lastReadThermocouple = 0.0;
 short int triac_delay = 0;
 short int constrained_triac_delay = constrain(triac_delay, 0, 6);
+
 void setup(void)
 {
 
@@ -41,13 +43,15 @@ void setup(void)
   sensor0.begin();
   sensor1.begin();
   tests();
-  pinMode(PUMP_PIN,OUTPUT);
-  pinMode(HEATER_PIN,OUTPUT);
+  pinMode(PUMP_PIN, OUTPUT);
+  pinMode(HEATER_PIN, OUTPUT);
+  pinMode(WHITE_LED, OUTPUT);
+  pinMode(GREEN_LED, OUTPUT);
   attachInterrupt(ZERO_CROSS_PIN, runPump, CHANGE);
 }
 void loop(void)
 {
-  
+
   sensor0.requestTemperatures();
   sensor1.requestTemperatures(); // Send the command to get temperature readings
                                  // Serial.println("DONE");
@@ -65,15 +69,21 @@ void loop(void)
   Serial.print("Triac delay is: ");
   Serial.println(triac_delay);
   runPump();
-  checkTemperatureDifference(DS18B20Temp0,DS18B20Temp1);
-  if(millis()-lastRead >= 1000)
+  checkTemperatureDifference(DS18B20Temp0, DS18B20Temp1, lastReadThermocouple, thermocoupleTemp);
+  lastReadThermocouple = thermocoupleTemp;
+  if (thermocoupleTemp < CONTROL_TEMP_VALUE)
   {
-    print_lcd(thermocoupleTemp,DS18B20Temp0,DS18B20Temp1);
-    lastRead=millis();
+    turnOnHeater();
   }
-
- 
-  
+  else if (thermocoupleTemp > CONTROL_TEMP_VALUE + 10)
+  {
+    turnOffHeater();
+  }
+  if (millis() - lastRead >= 1000)
+  {
+    print_lcd(thermocoupleTemp, DS18B20Temp0, DS18B20Temp1);
+    lastRead = millis();
+  }
 }
 
 bool tests()
@@ -95,7 +105,7 @@ bool lcdTest()
   lcd.init();
   lcd.backlight();
   lcd.print("Maya v0.0.1");
-  lcd.setCursor(7,3);
+  lcd.setCursor(7, 3);
   lcd.print("FYP 18-22");
   delay(1000);
   lcd.clear();
@@ -153,88 +163,83 @@ bool DS18B20Test()
 void print_lcd(float temp1, float temp2, float temp3)
 {
   lcd.clear();
-  lcd.setCursor(0,0);
+  lcd.setCursor(0, 0);
   lcd.print("Thermocouple: ");
   lcd.print(temp1);
-  lcd.setCursor(0,1);
+  lcd.setCursor(0, 1);
   lcd.print("Probe 1: ");
   lcd.print(temp2);
-  lcd.setCursor(0,2);
+  lcd.setCursor(0, 2);
   lcd.print("Probe 2: ");
   lcd.print(temp3);
-
-}
-
-/**
- * @brief function to log data
-*/
-void logData()
-{
-
 }
 
 /**
  * @brief function to increase flowrate according to temperature
-*/
+ */
 void increaseFlowrate()
 {
-  //implement increased flowrate
-  constrained_triac_delay += 1;
-
+  // implement increased flowrate
+  triac_delay -= 1;
 }
 
 /**
  * @brief function to decrease flowrate.
-*/
+ */
 void decreaseFlowrate()
 {
-  constrained_triac_delay -= 1;
+  triac_delay += 1;
 }
 
 /**
  * @brief function to run the pump.
-*/
+ */
 void runPump()
 {
   // TO IMPLEMENT RUN PUMP
+  digitalWrite(GREEN_LED, HIGH);
   delay(constrained_triac_delay);
+  digitalWrite(GREEN_LED, LOW);
   digitalWrite(PUMP_PIN, HIGH);
   delayMicroseconds(10);
   digitalWrite(PUMP_PIN, LOW);
-  
 }
 
-void checkTemperatureDifference(float a, float b)
+void checkTemperatureDifference(float a, float b, float c, float d)
 {
-  if(a-b>10){
+  if ((a - b > 10) || (d - a > 10))
+  {
     increaseFlowrate();
   }
-  else if (a-b<0){
+  else if ((a - b < 0) && (d - a < 0))
+  {
     decreaseFlowrate();
   }
 }
 /**
  * @brief function to turn on the heater
-*/
+ */
 void turnOnHeater()
 {
-  digitalWrite(HEATER_PIN,HIGH);
+  digitalWrite(HEATER_PIN, HIGH);
+  digitalWrite(WHITE_LED, HIGH);
 }
 
 /**
  * @brief function to turn off the heater
-*/
+ */
 void turnOffHeater()
 {
-  digitalWrite(HEATER_PIN,LOW);
+  digitalWrite(HEATER_PIN, LOW);
+  digitalWrite(WHITE_LED, LOW);
 }
 
 /**
  * @brief Function to turn on the fan
-*/
+ */
 void turnOnFan()
 {
-  digitalWrite(FAN_PIN,HIGH);
+  digitalWrite(FAN_PIN, HIGH);
 }
 
 /**
@@ -242,5 +247,5 @@ void turnOnFan()
  * */
 void turnOffFan()
 {
-  digitalWrite(FAN_PIN,LOW);
+  digitalWrite(FAN_PIN, LOW);
 }

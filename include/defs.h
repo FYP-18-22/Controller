@@ -17,6 +17,8 @@
 #define ZERO_CROSS_PIN PA0
 #define HEATER_PIN PB10
 #define FAN_PIN PB10
+#define GREEN_LED PB15
+#define WHITE_LED PA_9
 
 
 #endif
