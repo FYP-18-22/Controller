@@ -20,7 +20,7 @@ bool tests();
 bool lcdTest();
 bool thermocoupleTest();
 bool DS18B20Test();
-void print_lcd(float temp1, float temp2, float temp3, float flowrate);
+void print_lcd(float temp1, float temp2, float temp3);
 void controlFlowrate(float tempDifference, float wallTemperature);
 void runPump();
 void checkTemperatureDifference(float a, float b, float c, float d);
@@ -28,27 +28,17 @@ void turnOnHeater();
 void turnOffHeater();
 void turnOnFan();
 void turnOffFan();
-void fullspeed();
-float checkFlowrate();
 
 // Global variables
 unsigned long lastRead = 0;
 unsigned long lastBlink =0;
 unsigned long fanTimer = 0;
-
+float thermocoupleTemp = 0.0;
+float DS18B20Temp0 = 0.0;
+float DS18B20Temp1 = 0.0;
 float lastReadThermocouple = 0.0;
-int triac_delay = 2500;
-int constrained_triac_delay = constrain(triac_delay, 0, 5000);
-short int pump_flag = 0;
-
-float thermocoupleTemp = 0;
-float DS18B20Temp0 = 20;
-float DS18B20Temp1 = 20;
-short int temp_change_flag = 0;
-float flowrate =0.0;
-
-int current_time;
-int prev_time;
+short int triac_delay = 0;
+short int constrained_triac_delay = constrain(triac_delay, 0, 6);
 
 void setup(void)
 {
@@ -56,72 +46,44 @@ void setup(void)
   Serial.begin(115200);
   sensor0.begin();
   sensor1.begin();
-  pinMode(ZERO_CROSS_PIN, INPUT);
   pinMode(PUMP_PIN, OUTPUT);
   pinMode(HEATER_PIN, OUTPUT);
   pinMode(WHITE_LED, OUTPUT);
   pinMode(GREEN_LED, OUTPUT);
-  pinMode(FAN_PIN, OUTPUT);
-  pinMode(FLOWRATE_PIN,INPUT);
-  
+  attachInterrupt(ZERO_CROSS_PIN, runPump, CHANGE);
   while(!tests())
   {
     if(millis()-lastBlink >= 500){
       digitalWrite(WHITE_LED,!digitalRead(WHITE_LED));
       lastBlink =millis();
     }
+    
+
   };
-  delay(setup_time);
-  digitalWrite(FAN_PIN, LOW);
-  
-  attachInterrupt(ZERO_CROSS_PIN, runPump, CHANGE);
-  
-  pump_flag = 1;
-  prev_time = millis();
+ 
 }
-
-
-
-
 void loop(void)
 {
 
   sensor0.requestTemperatures();
-  // sensor1.requestTemperatures(); // Send the command to get temperature readings
+  sensor1.requestTemperatures(); // Send the command to get temperature readings
                                  // Serial.println("DONE");
   /********************************************************************/
-  if (temp_change_flag == 0)
-  {
-    thermocoupleTemp += 1;
-    if(thermocoupleTemp >=25)
-    {
-      temp_change_flag = 1;
-    }
-  }
-  else
-  {
-    thermocoupleTemp -= 1;
-    if(thermocoupleTemp <=0)
-    {
-      temp_change_flag = 0;
-    }
-  }
-  
-  Serial.print("Thermocouple temp = ");
+  float thermocoupleTemp = thermocouple.readCelsius();
+  float DS18B20Temp0 = sensor0.getTempCByIndex(0);
+  float DS18B20Temp1 = sensor1.getTempCByIndex(0);
+
+  Serial.print("C = ");
   Serial.println(thermocoupleTemp);
-  Serial.print("Last Thermocouple temp = ");
-  Serial.println(lastReadThermocouple);
+  Serial.print("Temp 1 is: ");
+  Serial.println(DS18B20Temp0);
+  Serial.print("Temp 2 is: ");
+  Serial.println(DS18B20Temp1);
   Serial.print("Triac delay is: ");
-  Serial.println(constrained_triac_delay);
-  // runPump();
-  current_time = millis();
+  Serial.println(triac_delay);
+  runPump();
   checkTemperatureDifference(DS18B20Temp0, DS18B20Temp1, lastReadThermocouple, thermocoupleTemp);
-  if(current_time - prev_time >= 2000)
-  {
-    lastReadThermocouple = thermocoupleTemp;
-    prev_time = current_time;
-  }
-  
+  lastReadThermocouple = thermocoupleTemp;
   if (thermocoupleTemp < CONTROL_TEMP_VALUE)
   {
     turnOnHeater();
@@ -132,13 +94,16 @@ void loop(void)
   }
   if (millis() - lastRead >= 1000)
   {
-    flowrate = checkFlowrate();
-    print_lcd(thermocoupleTemp, DS18B20Temp0, DS18B20Temp1,flowrate);
+    print_lcd(thermocoupleTemp, DS18B20Temp0, DS18B20Temp1);
     lastRead = millis();
   }
   if(millis()-lastBlink >= 100){
       digitalWrite(WHITE_LED,!digitalRead(WHITE_LED));
       lastBlink =millis();
+    }
+  if(millis()-fanTimer >= 3000){
+      digitalWrite(FAN_PIN,!digitalRead(FAN_PIN));
+      fanTimer =millis();
     }
   
 }
@@ -148,9 +113,9 @@ bool tests()
   while (!lcdTest())
   {
   }
-  // while (!thermocoupleTest())
-  // {
-  // }
+  while (!thermocoupleTest())
+  {
+  }
   while (!DS18B20Test())
   {
   }
@@ -217,7 +182,7 @@ bool DS18B20Test()
   return true;
 }
 
-void print_lcd(float temp1, float temp2, float temp3, float flowrate)
+void print_lcd(float temp1, float temp2, float temp3)
 {
   lcd.clear();
   lcd.setCursor(0, 0);
@@ -229,10 +194,6 @@ void print_lcd(float temp1, float temp2, float temp3, float flowrate)
   lcd.setCursor(0, 2);
   lcd.print("Probe 2: ");
   lcd.print(temp3);
-  lcd.setCursor(0,3);
-  lcd.print("Flowrate:");
-  lcd.print(flowrate);
-  lcd.print("L/m");
 }
 
 /**
@@ -241,9 +202,7 @@ void print_lcd(float temp1, float temp2, float temp3, float flowrate)
 void increaseFlowrate()
 {
   // implement increased flowrate
-triac_delay -= 500;
-constrained_triac_delay = constrain(triac_delay, 0, 5000);
- 
+  triac_delay -= 1;
 }
 
 /**
@@ -251,9 +210,7 @@ constrained_triac_delay = constrain(triac_delay, 0, 5000);
  */
 void decreaseFlowrate()
 {
-  triac_delay += 500;
-  constrained_triac_delay = constrain(triac_delay, 0, 5000);
-  
+  triac_delay += 1;
 }
 
 /**
@@ -262,30 +219,22 @@ void decreaseFlowrate()
 void runPump()
 {
   // TO IMPLEMENT RUN PUMP
-  if(pump_flag == 0)
-  {
-    constrained_triac_delay = constrained_triac_delay;
-  }
-  else
-  {
-    delayMicroseconds(constrained_triac_delay);
-    digitalWrite(PUMP_PIN, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(PUMP_PIN, LOW);
-  }
-
+  digitalWrite(GREEN_LED, HIGH);
+  delay(constrained_triac_delay);
+  digitalWrite(GREEN_LED, LOW);
+  digitalWrite(PUMP_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(PUMP_PIN, LOW);
 }
 
 void checkTemperatureDifference(float a, float b, float c, float d)
 {
-  if (d - c >= 5)
+  if ((a - b > 10) || (d - a > 10))
   {
-    Serial.println("Mike");
     increaseFlowrate();
   }
-  else if (c - d >= 5)
+  else if ((a - b < 0) && (d - a < 0))
   {
-    Serial.println("Mike");
     decreaseFlowrate();
   }
 }
@@ -295,6 +244,8 @@ void checkTemperatureDifference(float a, float b, float c, float d)
 void turnOnHeater()
 {
   digitalWrite(HEATER_PIN, HIGH);
+
+  
 }
 
 /**
@@ -303,6 +254,7 @@ void turnOnHeater()
 void turnOffHeater()
 {
   digitalWrite(HEATER_PIN, LOW);
+
 }
 
 /**
@@ -319,39 +271,4 @@ void turnOnFan()
 void turnOffFan()
 {
   digitalWrite(FAN_PIN, LOW);
-}
-
-// void full_speed()
-// {
-//   triac_delay = 0;
-//   pump_flag = 0;
-//   for(int full_speed = 0; full_speed <= 6; full_speed++)
-//   {
-//     delay(1000);
-//     digitalWrite(PUMP_PIN, HIGH);
-//     Serial.print("Full speed temp. data is : ");
-//     Serial.println("last value");
-//   }
-//   pump_flag = 1;
-// }
-float checkFlowrate()
-{
-  int X;
-  int Y;
-  float TIME = 0;
-  float FREQUENCY = 0;
-  float WATER = 0;
-  X = pulseIn(FLOWRATE_PIN, HIGH);
-  Y = pulseIn(FLOWRATE_PIN, LOW);
-  TIME = X + Y;
-  FREQUENCY = 1000000/TIME;
-  WATER = FREQUENCY/7.5;
-
-  if(FREQUENCY >= 0)
-  {
-  if(isinf(FREQUENCY)) return NULL;
-
-  else{return WATER;}
-
-  }
 }

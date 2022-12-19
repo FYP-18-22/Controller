@@ -12,7 +12,7 @@
 #define MAX_TEMP_DIFF 5.0
 #define CONTROL_TEMP_VALUE 20.0
 
-#define FLOWRATE_PIN PB3
+
 #define PUMP_PIN PB14
 #define ZERO_CROSS_PIN PB8
 #define HEATER_PIN PB10

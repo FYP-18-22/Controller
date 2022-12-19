@@ -10,15 +10,15 @@
 
 #define MAX_WALL_TEMP 400.0
 #define MAX_TEMP_DIFF 5.0
-#define CONTROL_TEMP_VALUE 20.0
+#define CONTROL_TEMP_VALUE 200.0
 
-#define FLOWRATE_PIN PB3
+
 #define PUMP_PIN PB14
 #define ZERO_CROSS_PIN PB8
 #define HEATER_PIN PB10
 #define FAN_PIN PB4
 #define GREEN_LED PB15
 #define WHITE_LED PA9
-#define setup_time 5000
+
 
 #endif

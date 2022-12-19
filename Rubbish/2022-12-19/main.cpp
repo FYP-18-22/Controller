@@ -20,7 +20,7 @@ bool tests();
 bool lcdTest();
 bool thermocoupleTest();
 bool DS18B20Test();
-void print_lcd(float temp1, float temp2, float temp3, float flowrate);
+void print_lcd(float temp1, float temp2, float temp3);
 void controlFlowrate(float tempDifference, float wallTemperature);
 void runPump();
 void checkTemperatureDifference(float a, float b, float c, float d);
@@ -29,7 +29,6 @@ void turnOffHeater();
 void turnOnFan();
 void turnOffFan();
 void fullspeed();
-float checkFlowrate();
 
 // Global variables
 unsigned long lastRead = 0;
@@ -45,7 +44,6 @@ float thermocoupleTemp = 0;
 float DS18B20Temp0 = 20;
 float DS18B20Temp1 = 20;
 short int temp_change_flag = 0;
-float flowrate =0.0;
 
 int current_time;
 int prev_time;
@@ -62,7 +60,6 @@ void setup(void)
   pinMode(WHITE_LED, OUTPUT);
   pinMode(GREEN_LED, OUTPUT);
   pinMode(FAN_PIN, OUTPUT);
-  pinMode(FLOWRATE_PIN,INPUT);
   
   while(!tests())
   {
@@ -93,7 +90,7 @@ void loop(void)
   if (temp_change_flag == 0)
   {
     thermocoupleTemp += 1;
-    if(thermocoupleTemp >=25)
+    if(thermocoupleTemp >=50)
     {
       temp_change_flag = 1;
     }
@@ -132,8 +129,7 @@ void loop(void)
   }
   if (millis() - lastRead >= 1000)
   {
-    flowrate = checkFlowrate();
-    print_lcd(thermocoupleTemp, DS18B20Temp0, DS18B20Temp1,flowrate);
+    print_lcd(thermocoupleTemp, DS18B20Temp0, DS18B20Temp1);
     lastRead = millis();
   }
   if(millis()-lastBlink >= 100){
@@ -217,7 +213,7 @@ bool DS18B20Test()
   return true;
 }
 
-void print_lcd(float temp1, float temp2, float temp3, float flowrate)
+void print_lcd(float temp1, float temp2, float temp3)
 {
   lcd.clear();
   lcd.setCursor(0, 0);
@@ -229,10 +225,6 @@ void print_lcd(float temp1, float temp2, float temp3, float flowrate)
   lcd.setCursor(0, 2);
   lcd.print("Probe 2: ");
   lcd.print(temp3);
-  lcd.setCursor(0,3);
-  lcd.print("Flowrate:");
-  lcd.print(flowrate);
-  lcd.print("L/m");
 }
 
 /**
@@ -334,24 +326,3 @@ void turnOffFan()
 //   }
 //   pump_flag = 1;
 // }
-float checkFlowrate()
-{
-  int X;
-  int Y;
-  float TIME = 0;
-  float FREQUENCY = 0;
-  float WATER = 0;
-  X = pulseIn(FLOWRATE_PIN, HIGH);
-  Y = pulseIn(FLOWRATE_PIN, LOW);
-  TIME = X + Y;
-  FREQUENCY = 1000000/TIME;
-  WATER = FREQUENCY/7.5;
-
-  if(FREQUENCY >= 0)
-  {
-  if(isinf(FREQUENCY)) return NULL;
-
-  else{return WATER;}
-
-  }
-}
