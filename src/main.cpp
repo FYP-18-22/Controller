@@ -6,10 +6,12 @@
 #include "max6675.h"
 #include "LiquidCrystal_I2C.h"
 #include "defs.h"
+#include "Keypad.h"
+
 
 // Objects
 MAX6675 thermocouple(sckPin, csPin, soPin); // create instance object of MAX6675
-
+Keypad keypad = Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS);
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 
 // function prototypes
@@ -24,28 +26,39 @@ void turnOnFan();
 void turnOffFan();
 void checkflowrate();
 void increaseFlowrate();
+void keypadEvent(KeypadEvent key);
 
 unsigned long lastBlink =0;
 
-float lastReadThermocouple = 0.0;
+
 int triac_delay = 2500;
 int constrained_triac_delay = constrain(triac_delay, 0, 5000);
 short int pump_flag = 0;
 
 float thermocoupleTemp = 0.0;
+float lastReadThermocouple = 0.0;
+float lastContThermocouple = 0.0;
 
 short int temp_change_flag = 0;
 float flowrate =0.0;
 
 int initial_time;
 int current_time;
+
+int f_prev_time = 0;
+int f_current_time = 0;
+
+int prev_temp_time = 0;
+int current_temp_time;
+
 int prev_time;
 int var1 = 0;
-int init_time_flag = 0;
+int init_const_time_flag = 0;
+int init_dyn_time_flag = 0;
 
 
 
-int fx;
+int  fx;
 int fy;
 float ftime;
 float f_frequency;
@@ -59,6 +72,8 @@ void setup(void)
 {
 
   Serial.begin(115200);
+ // keypad.addEventListener(keypadEvent);
+  turnOffFan();
   pinMode(ZERO_CROSS_PIN, INPUT);
   pinMode(PUMP_PIN, OUTPUT);
   pinMode(HEATER_PIN, OUTPUT);
@@ -66,6 +81,8 @@ void setup(void)
   pinMode(GREEN_LED, OUTPUT);
   pinMode(FAN_PIN, OUTPUT);
   pinMode(FLOWRATE_PIN,INPUT);
+  pinMode(PC13,OUTPUT);
+  //digitalWrite(PC13,LOW);
   
   while(!tests())
   {
@@ -87,25 +104,46 @@ void setup(void)
 void loop(void)
 {
   thermocoupleTemp = thermocouple.readCelsius();
-  checkflowrate();
+  f_current_time = millis();
+  if(f_current_time - f_prev_time >= 1000)
+  {
+    checkflowrate();
+    f_prev_time = f_current_time;
+  }
+  //Serial.println(f_flm);
+  Serial.println(constrained_triac_delay);
+  char key = keypad.getKey();
+  //Serial.println(key);
   switch(var1)
   {
     case 0:
+      pump_flag = 0;
+      init_const_time_flag = 0;
+      init_dyn_time_flag = 0;
       lcd.clear();
       lcd.setCursor(0,0);
-      lcd.print("IDLE STATE");
-      lcd.setCursor(1,0);
+      lcd.print("I_STATE   ");
+      lcd.print("LCT: ");
+      lcd.print(lastContThermocouple);
+      lcd.setCursor(0,1);
       lcd.print("Temp: ");
       lcd.print(thermocoupleTemp);
       lcd.print("deg");
-      lcd.setCursor(2,0);
+      lcd.setCursor(0,2);
       lcd.print("Q: ");
       lcd.print(f_flm);
-      lcd.print("l/m");
-      lcd.setCursor(3,0);
-      lcd.print("TEST1: 1 :: TEST2: 2");
-      pump_flag = 0;
+      lcd.print(" l/m");
+      lcd.setCursor(0,3);
+      lcd.print("CTEST: 1 :: DTEST: 2");
       turnOffFan();
+      if(key == '1')
+      {
+        var1 = 1;
+      }
+      if(key == '2')
+      {
+        var1 = 2;
+      }
       // if(keypad_pressed)
       // {
       //   var1 = 2;
@@ -115,50 +153,113 @@ void loop(void)
       turnOnFan();
       lcd.clear();
       lcd.setCursor(0,0);
-      lcd.print("CONSTANT STATE");
-      lcd.setCursor(1,0);
+      lcd.print("C_STATE  ");
+      lcd.print("LCT: ");
+      lcd.print(lastContThermocouple);
+      lcd.setCursor(0,1);
       lcd.print("Temp: ");
       lcd.print(thermocoupleTemp);
       lcd.print("deg");
-      lcd.setCursor(2,0);
+      lcd.setCursor(0,2);
       lcd.print("Q: ");
       lcd.print(f_flm);
-      lcd.print("l/m");
-      lcd.setCursor(3,0);
+      lcd.print(" l/m");
+      lcd.setCursor(0,3);
       lcd.print("CANCEL: C");
+      if(init_const_time_flag == 0)
+      {
+        initial_time = millis();
+        init_const_time_flag = 1;
+      }
+
       triac_delay = 2500;
       constrained_triac_delay = constrain(triac_delay, 0, 5000);
+      current_time = millis();
+      if(current_time - initial_time <= 110000)
+      {
+        pump_flag = 1;
+        if((current_time - initial_time >= 20000) && (current_time - initial_time <= 50000))
+        {
+          turnOnHeater();
+        }
+        else
+        {
+          turnOffHeater();
+        }
+      }
+      else
+      {
+        pump_flag = 0; //pump off
+        var1 = 0; //will go to case 0
+        lastContThermocouple = thermocoupleTemp; 
+      }
+      if(key == 'C')
+      {
+        var1 = 0;
+      }
       break;
 
     case 2:
-      if(init_time_flag == 0)
-      {
-        initial_time = millis();
-        init_time_flag = 1;
-      }
       turnOnFan();
       lcd.clear();
       lcd.setCursor(0,0);
-      lcd.print("DYNAMIC STATE");
-      lcd.setCursor(1,0);
+      lcd.print("D_STATE  ");
+      lcd.print("LCT: ");
+      lcd.print(lastContThermocouple);
+      lcd.setCursor(0,1);
       lcd.print("Temp: ");
       lcd.print(thermocoupleTemp);
       lcd.print("deg");
-      lcd.setCursor(2,0);
+      lcd.setCursor(0,2);
       lcd.print("Q: ");
       lcd.print(f_flm);
-      lcd.print("l/m");
-      lcd.setCursor(3,0);
+      lcd.print(" l/m");
+      lcd.setCursor(0,3);
       lcd.print("CANCEL: C");
       
-      current_time = millis();
-      if(current_time - initial_time >= 5000)
+      if(init_dyn_time_flag == 0)
       {
-        lastReadThermocouple = thermocoupleTemp;
+        initial_time = millis();
+        init_dyn_time_flag = 1;
       }
-      if(thermocoupleTemp - lastReadThermocouple > 5)
+
+      current_time = millis();
+      
+      if((current_time - initial_time <= 110000))
       {
-        increaseFlowrate();
+        pump_flag = 1;
+        if(current_time - initial_time >= 20000)
+        {
+          if(current_time - initial_time <= 50000)
+          {
+            turnOnHeater();
+          }
+          else
+          {
+            turnOffHeater();
+          }
+          current_temp_time = millis();
+          if(current_temp_time - prev_temp_time >= 3000)
+          {
+            lastReadThermocouple = thermocoupleTemp;
+            prev_temp_time = current_temp_time;
+          }
+          if(thermocoupleTemp - lastReadThermocouple >=0.2)
+          {
+            increaseFlowrate();
+            
+          }
+        }
+      }
+      else
+      {
+        pump_flag = 0;
+        var1 = 0;
+        lastContThermocouple = thermocoupleTemp;
+      }
+      if(key == 'C')
+      {
+        var1 = 0;
       }
       break;
     default:
@@ -184,13 +285,13 @@ void loop(void)
   //   }
   // }
   
-  Serial.print("Thermocouple temp = ");
-  Serial.println(thermocoupleTemp);
-  Serial.print("Last Thermocouple temp = ");
-  Serial.println(lastReadThermocouple);
-  Serial.print("Triac delay is: ");
-  Serial.println(constrained_triac_delay);
-  current_time = millis();
+  // Serial.print("Thermocouple temp = ");
+  // Serial.println(thermocoupleTemp);
+  // Serial.print("Last Thermocouple temp = ");
+  // Serial.println(lastReadThermocouple);
+  // Serial.print("Triac delay is: ");
+  // Serial.println(constrained_triac_delay);
+  //current_time = millis();
 
 }
 
@@ -291,7 +392,7 @@ void runPump()
   // TO IMPLEMENT RUN PUMP
   if(pump_flag == 0)
   {
-    constrained_triac_delay = constrained_triac_delay;
+    digitalWrite(PUMP_PIN, LOW);
   }
   else
   {
@@ -348,37 +449,5 @@ void turnOffFan()
   digitalWrite(FAN_PIN, HIGH);
 }
 
-// void full_speed()
-// {
-//   triac_delay = 0;
-//   pump_flag = 0;
-//   for(int full_speed = 0; full_speed <= 6; full_speed++)
-//   {
-//     delay(1000);
-//     digitalWrite(PUMP_PIN, HIGH);
-//     Serial.print("Full speed temp. data is : ");
-//     Serial.println("last value");
-//   }
-//   pump_flag = 1;
-// }
-// float checkFlowrate()
-// {
-//   int X;
-//   int Y;
-//   float TIME = 0;
-//   float FREQUENCY = 0;
-//   float WATER = 0;
-//   X = pulseIn(FLOWRATE_PIN, HIGH);
-//   Y = pulseIn(FLOWRATE_PIN, LOW);
-//   TIME = X + Y;
-//   FREQUENCY = 1000000/TIME;
-//   WATER = FREQUENCY/7.5;
 
-//   if(FREQUENCY >= 0)
-//   {
-//   if(isinf(FREQUENCY)) return NULL;
 
-//   else{return WATER;}
-
-//   }
-// }
